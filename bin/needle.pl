@@ -35,7 +35,7 @@ sub align   # Takes two strings removes all dashes and returns the alignment.
     }
 
     #print "needle -aseq $file1 -bseq $file2 -gapopen 10 -gapextend 0.5 -outfile $file3\n";
-    `needle -aseq $file1 -bseq $file2 -gapopen 1 -gapextend 0.5 -outfile $file3 > /dev/null 2>&1`;
+    `$needle -aseq $file1 -bseq $file2 -gapopen 1 -gapextend 0.5 -outfile $file3 > /dev/null 2>&1`; #Added missing $!
     #print $file3."\n";
     ($ali_return1,$ali_return2)=parse_needle_output($file3);
     `rm $file1 $file2 $file3`;
