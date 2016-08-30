@@ -1,17 +1,31 @@
 #!/usr/bin/perl -w
 use Cwd 'abs_path';
 use File::Basename;
+use HTTP::Cookies;
 
 my $LWP_loaded=1;
-my $HTML_loaded=0;
+my $HTML_loaded=1;
+my $Mechanize_loaded=1;
 
 eval {
     require LWP::UserAgent; 
     LWP::UserAgent->import();
     1;
 } or do {
+   print STDERR "TEST";
    my $error = $@;
    $LWP_loaded=0
+
+};
+
+eval {
+    require WWW::Mechanize; 
+    WWW::Mechanize->import();
+    1;
+} or do {
+   print STDERR "TEST";
+   my $error = $@;
+   $Mechanize_loaded=0
 
 };
 
@@ -25,7 +39,7 @@ eval {
 };
 
 
-my $DB="/home/bjornw/Research/DB/casp11/uniref90.fasta";
+my $DB="PUT/HERE/YOUR/UNIREF90/PATH";
 
 if(scalar(@ARGV) % 2 != 0) {
     print STDERR "Usage: run_all_external.pl -pdb [pdbfile] -fasta [fastafile] -membrane 1 (if membrane protein) -overwrite 1 (if overwrite)\n";
@@ -127,17 +141,32 @@ if($membrane)
 	$topcons="$pdb.topcons";
 	$topcons_fa="$pdb.topcons.fa";
 	if($overwrite || !-e $topcons) {
-	    print "topcons...\n";
-	    my $ua = new LWP::UserAgent;
-	    my $response = $ua -> post('http://topcons.net',{'sequence' => $seq,'do' => 'Submit',});
+	    print "Getting predictions from TOPCONS...\n";
+            print "QUERY:\n>$pdb\n$seq\n";
+	    my $mech=WWW::Mechanize->new;
+	    $mech->get("http://topcons.net");
+	    my $response=$mech->submit_form(form_name => 'seq_form', fields => { rawseq => ">$pdb\n$seq" }, button => 'do');
 	    $content=$response->content();
-	    if($content=~/result\/(.+)\/topcons.txt/) {
+	    $| = 1;
+	    if( $content=~/for (.+) is not finished yet/ )
+	    {
 		$id=$1;
-		print $id."\n";
-		my $response = $ua -> post("http://topcons.net/result/$id/topcons.txt");
+		print "TOPCONS Job ID: $id\n";
+		print "Getting results\n";
+		$mech->get("http://topcons.net/pred/result/$id/");
+		$results=$mech->content;
+		while ( $results=~/Status: <font color="blue">Running<\/font>/ ){
+			$mech->get("http://topcons.net/pred/result/$id/");
+			$results=$mech->content;
+			print "Still running. Sleeping for 10 and rechecking...";
+			sleep(10);
+		if($results=~/Status: <font color="green">Finished<\/font>/) {
+		my $response = $mech -> post("http://topcons.net/static/result/$id/$id/query.result.txt");
 		open(OUT,">$topcons");
 		print OUT $response->content();
 		close(OUT);
+		}
+		}
 		#my $parser = new MyParser;
 #	my $parsed=$parser->parse($content);
 #	print $parsed."\n";
